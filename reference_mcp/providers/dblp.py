@@ -64,9 +64,8 @@ class DBLPProvider(AbstractProvider):
             bibtex_type = "article" if info.get("type") == "Journal Articles" else "inproceedings"
             bibtex_key = info.get("key", "").split("/")[-1] if info.get("key") else "unknown"
 
-            bibtex_lines = [f"@{bibtex_type}{{{bibtex_key},"]
-            bibtex_lines.append(f"  title = {{{info.get('title', '')}}}")
-            bibtex_lines.append(f"  author = {{{' and '.join(authors)}}}")
+            bibtex_lines = [f"@{bibtex_type}{{{bibtex_key},", f"  title = {{{info.get('title', '')}}}",
+                            f"  author = {{{' and '.join(authors)}}}"]
             if year:
                 bibtex_lines.append(f"  year = {{{year}}}")
             if info.get("venue"):
@@ -96,12 +95,10 @@ class DBLPProvider(AbstractProvider):
                 sources=[
                     ProviderMeta(
                         name=self.NAME,
-                        relevance_score=float(hit.get("@score", 0)),
                         url=info.get("url"),
                         raw_data=hit,
                     )
                 ],
-                score=float(hit.get("@score", 0)),
             )
 
             # Apply year filter if DBLP doesn't support it natively

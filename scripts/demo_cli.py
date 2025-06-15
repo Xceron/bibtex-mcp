@@ -74,7 +74,6 @@ def search(
                     "doi": ref.doi,
                     "arxiv_id": ref.arxiv_id,
                     "bibtex": ref.bibtex,
-                    "score": ref.score,
                     "sources": [src.name for src in ref.sources],
                 }
                 for ref in results
@@ -100,7 +99,6 @@ def search(
         table.add_column("Year", style="yellow")
         table.add_column("Venue", style="blue")
         table.add_column("Sources", style="magenta")
-        table.add_column("Score", style="red")
 
         for ref in results:
             authors_str = "; ".join(ref.authors[:3])
@@ -115,7 +113,6 @@ def search(
                 str(ref.year) if ref.year else "N/A",
                 ref.venue[:30] if ref.venue else "N/A",
                 sources_str,
-                f"{ref.score:.2f}",
             )
 
         console.print(table)

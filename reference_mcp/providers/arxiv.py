@@ -41,7 +41,7 @@ class ArxivProvider(AbstractProvider):
 
         url = f"{self.base_url}?search_query={search_query}&start=0&max_results={min(limit, self.MAX_PER_QUERY)}"
 
-        headers = {"User-Agent": "ReferenceMCP/1.0 (https://github.com/yourusername/reference-mcp)"}
+        headers = {"User-Agent": "BibTeX-MCP/1.0 (https://github.com/Xceron/bibtex-mcp)"}
 
         async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
             response = await client.get(url, headers=headers)
@@ -96,9 +96,8 @@ class ArxivProvider(AbstractProvider):
             # Build BibTeX
             bibtex_key = arxiv_id.replace("/", "_") if arxiv_id else "unknown"
 
-            bibtex_lines = [f"@article{{{bibtex_key},"]
-            bibtex_lines.append(f"  title = {{{title}}}")
-            bibtex_lines.append(f"  author = {{{' and '.join(authors)}}}")
+            bibtex_lines = [f"@article{{{bibtex_key},", f"  title = {{{title}}}",
+                            f"  author = {{{' and '.join(authors)}}}"]
             if year:
                 bibtex_lines.append(f"  year = {{{year}}}")
             bibtex_lines.append(f"  eprint = {{{arxiv_id}}}")

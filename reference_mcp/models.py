@@ -17,7 +17,6 @@ class ProviderMeta(BaseModel):
     """Metadata from a specific provider about a reference."""
 
     name: str = Field(..., description="Provider name (e.g., 'dblp', 'semantic_scholar')")
-    relevance_score: Optional[float] = Field(None, description="Provider-specific relevance score")
     url: Optional[str] = Field(None, description="Direct URL to this reference on provider")
     raw_data: Optional[Dict[str, Any]] = Field(None, description="Raw response data from provider")
 
@@ -55,9 +54,6 @@ class Reference(BaseModel):
         default_factory=list, description="List of providers that returned this reference"
     )
 
-    # Aggregated score
-    score: float = Field(0.0, description="Aggregated relevance score across providers")
-
     def merge_with(self, other: "Reference") -> None:
         """Merge another reference into this one, keeping most complete data."""
         # Prefer non-None values
@@ -86,8 +82,3 @@ class Reference(BaseModel):
 
         # Add all sources
         self.sources.extend(other.sources)
-
-        # Recalculate score as average of all provider scores
-        provider_scores = [s.relevance_score for s in self.sources if s.relevance_score is not None]
-        if provider_scores:
-            self.score = sum(provider_scores) / len(provider_scores)

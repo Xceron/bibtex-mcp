@@ -1,10 +1,12 @@
-import logging
-from fastmcp import FastMCP
-from typing import Dict, Any, Optional
 import json
+import logging
+from typing import Optional
+
+from fastmcp import FastMCP
+
+from reference_mcp.aggregator import fanout, dedupe_rank
 from reference_mcp.models import SearchInput
 from reference_mcp.providers.registry import get_providers
-from reference_mcp.aggregator import fanout, dedupe_rank
 
 logger = logging.getLogger(__name__)
 mcp = FastMCP("ReferenceSearch")
@@ -13,7 +15,7 @@ mcp = FastMCP("ReferenceSearch")
 @mcp.tool(name="search_reference")
 async def search_reference(
     query: str, max_results: int = 20, year: Optional[int] = None, author: Optional[str] = None
-) -> Dict[str, Any]:
+) -> str:
     """
     Search academic literature databases (DBLP, Semantic Scholar, arXiv, OpenAlex) to find research papers and return properly formatted BibTeX citations.
 
@@ -27,10 +29,9 @@ async def search_reference(
     Each result includes complete bibliographic metadata and a ready-to-use BibTeX citation.
 
     Args:
-        query: Academic search terms (paper titles, author names, keywords, concepts).
-               Examples: "transformer architecture", "John Smith machine learning", "BERT language model"
+        query: Academic search terms (paper titles, author names, years or any combination of them yields the best results).
         max_results: Number of results to return (1-100, default 20). Use lower values (5-10) for focused searches.
-        year: Optional year filter. If provided, returns papers published in or after this year.
+        year: Optional year filter. If provided, returns papers published in this year.
         author: Optional author name filter. If provided, returns papers by authors matching this name.
 
     Returns:
@@ -38,7 +39,7 @@ async def search_reference(
         - Complete bibliographic data (title, authors, year, venue, DOI, etc.)
         - Abstract text when available
         - Formatted BibTeX citation ready for use
-        - Citation count and relevance score
+        - Citation count
         - Source databases that found this reference
     """
     logger.info(f"Tool called with query: {query}, max_results: {max_results}, year: {year}, author: {author}")
@@ -55,7 +56,7 @@ async def search_reference(
         provider_instances = get_providers(None)
         logger.info(f"Using all providers: {[p.NAME for p in provider_instances]}")
 
-        # Execute parallel search with filters - overfetch for better deduplication
+        # Execute parallel search with filters - over-fetch for better deduplication
         all_results = await fanout(
             input_data.query,
             input_data.max_results * 2,  # Over-fetch for better deduplication

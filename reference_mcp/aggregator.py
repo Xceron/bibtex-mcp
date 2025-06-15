@@ -1,5 +1,3 @@
-"""Aggregator for deduplicating and ranking search results."""
-
 import asyncio
 from typing import List, Optional, Set, Tuple
 from rapidfuzz import fuzz
@@ -135,12 +133,11 @@ def dedupe_rank(references: List[Reference], max_results: int) -> List[Reference
 
         merged_refs.append(current_ref)
 
-    # Sort by score (primary), then by year (secondary)
+    # Sort by year (primary), then by title (secondary)
     def sort_key(ref: Reference) -> Tuple:
         return (
-            -ref.score,  # Higher score first
             -(ref.year or 0),  # More recent first
-            ref.title.lower(),  # Alphabetical as final tiebreaker
+            ref.title.lower(),  # Alphabetical as tiebreaker
         )
 
     merged_refs.sort(key=sort_key)
