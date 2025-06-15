@@ -12,12 +12,11 @@ def main():
         # Run with stdio transport for local Claude Desktop
         mcp.run()
     else:
-        # Run with streamable-http transport for remote connections
+        # Run with SSE transport for remote connections
         mcp.run(
-            transport="streamable-http",
+            transport="sse",
             host=os.getenv("HOST", "0.0.0.0"),
             port=int(os.getenv("PORT", "8000")),
-            path=os.getenv("MCP_PATH", "/"),
             log_level=os.getenv("LOG_LEVEL", "info"),
         )
 

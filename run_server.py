@@ -41,8 +41,8 @@ def main():
     port = int(os.getenv("PORT", "8000"))
     log_level = os.getenv("LOG_LEVEL", "info")
 
-    # Create FastMCP app with streamable-http
-    mcp_app = mcp.http_app(transport="streamable-http")
+    # Create FastMCP app with SSE
+    mcp_app = mcp.http_app(transport="sse")
     
     # Create Starlette app with OAuth stub endpoints
     routes = [
