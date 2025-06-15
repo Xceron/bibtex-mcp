@@ -45,7 +45,9 @@ def main():
 
     app = Starlette(routes=routes)
 
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=False
+    )
     # Run with uvicorn
     uvicorn.run(
         app,
