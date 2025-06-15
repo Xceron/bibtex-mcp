@@ -16,7 +16,7 @@ def main():
     # Get configuration from environment with defaults
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    path = os.getenv("MCP_PATH", "/mcp")
+    path = os.getenv("MCP_PATH", "/")
     log_level = os.getenv("LOG_LEVEL", "info")
 
     # Run server with streamable-http transport
