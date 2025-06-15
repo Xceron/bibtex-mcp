@@ -2,7 +2,7 @@
 
 import httpx
 import xml.etree.ElementTree as ET
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 import re
 
@@ -21,9 +21,25 @@ class ArxivProvider(AbstractProvider):
         super().__init__()
         self.base_url = "http://export.arxiv.org/api/query"
 
-    async def search(self, query: str, limit: int) -> List[Reference]:
+    async def search(
+        self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None
+    ) -> List[Reference]:
         """Search arXiv for papers."""
-        url = f"{self.base_url}?search_query=all:{quote(query)}&start=0&max_results={min(limit, self.MAX_PER_QUERY)}"
+        # Build search query with filters
+        search_parts = [f"all:{quote(query)}"]
+
+        # Add author filter using au: prefix
+        if author:
+            search_parts.append(f"au:{quote(author)}")
+
+        # Join with AND operator
+        search_query = "+AND+".join(search_parts)
+
+        # Add date filter if year is provided (submittedDate:[YYYY0101 TO *])
+        if year:
+            search_query += f"+AND+submittedDate:[{year}0101+TO+*]"
+
+        url = f"{self.base_url}?search_query={search_query}&start=0&max_results={min(limit, self.MAX_PER_QUERY)}"
 
         headers = {"User-Agent": "ReferenceMCP/1.0 (https://github.com/yourusername/reference-mcp)"}
 

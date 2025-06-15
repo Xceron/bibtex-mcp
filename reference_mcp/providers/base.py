@@ -1,7 +1,7 @@
 """Base provider class for academic search providers."""
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 
 from ..models import Reference
@@ -19,25 +19,31 @@ class AbstractProvider(ABC):
         self._cache_expiry: dict = {}
 
     @abstractmethod
-    async def search(self, query: str, limit: int) -> List[Reference]:
+    async def search(
+        self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None
+    ) -> List[Reference]:
         """Search the provider for references matching the query.
 
         Args:
             query: Free-text search string
             limit: Maximum number of results to return
+            year: Optional year filter (papers published in or after this year)
+            author: Optional author name filter
 
         Returns:
             List of Reference objects
         """
         pass
 
-    def _cache_key(self, query: str, limit: int) -> str:
+    def _cache_key(self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None) -> str:
         """Generate cache key for query."""
-        return f"{self.NAME}:{query}:{limit}"
+        return f"{self.NAME}:{query}:{limit}:{year}:{author}"
 
-    async def cached_search(self, query: str, limit: int) -> List[Reference]:
+    async def cached_search(
+        self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None
+    ) -> List[Reference]:
         """Search with simple LRU caching (15 minutes)."""
-        cache_key = self._cache_key(query, limit)
+        cache_key = self._cache_key(query, limit, year, author)
         now = datetime.now()
 
         # Check cache
@@ -50,7 +56,7 @@ class AbstractProvider(ABC):
                 del self._cache_expiry[cache_key]
 
         # Fetch fresh results
-        results = await self.search(query, min(limit, self.MAX_PER_QUERY))
+        results = await self.search(query, min(limit, self.MAX_PER_QUERY), year, author)
 
         # Cache results
         self._cache[cache_key] = results

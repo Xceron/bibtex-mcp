@@ -8,12 +8,14 @@ from reference_mcp.models import Reference
 from reference_mcp.providers.base import AbstractProvider
 
 
-async def fanout(query: str, k: int, providers: List[AbstractProvider]) -> List[Reference]:
+async def fanout(
+    query: str, k: int, providers: List[AbstractProvider], year: Optional[int] = None, author: Optional[str] = None
+) -> List[Reference]:
     """Execute search across all providers concurrently with timeout handling."""
 
     async def search_with_timeout(provider: AbstractProvider) -> List[Reference]:
         try:
-            return await asyncio.wait_for(provider.cached_search(query, k), timeout=provider.TIMEOUT)
+            return await asyncio.wait_for(provider.cached_search(query, k, year, author), timeout=provider.TIMEOUT)
         except asyncio.TimeoutError:
             return []
         except Exception:

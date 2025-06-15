@@ -2,7 +2,7 @@
 
 import os
 import httpx
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 from dotenv import load_dotenv
 
@@ -26,12 +26,23 @@ class SemanticScholarProvider(AbstractProvider):
         # Support both environment variable names
         self.api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
-    async def search(self, query: str, limit: int) -> List[Reference]:
+    async def search(
+        self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None
+    ) -> List[Reference]:
         """Search Semantic Scholar for papers."""
         fields = "title,authors,year,venue,externalIds,url,abstract,citationCount,publicationDate"
-        url = (
-            f"{self.base_url}/paper/search?query={quote(query)}&limit={min(limit, self.MAX_PER_QUERY)}&fields={fields}"
-        )
+
+        # Build query with author if provided
+        search_query = query
+        if author:
+            # Add author to the search query
+            search_query = f"{query} {author}"
+
+        url = f"{self.base_url}/paper/search?query={quote(search_query)}&limit={min(limit, self.MAX_PER_QUERY)}&fields={fields}"
+
+        # Add year filter if provided
+        if year:
+            url += f"&year={year}-"
 
         headers = {}
         if self.api_key:
@@ -73,9 +84,11 @@ class SemanticScholarProvider(AbstractProvider):
             bibtex_type = "article"
             bibtex_key = paper.get("paperId", "unknown")
 
-            bibtex_lines = [f"@{bibtex_type}{{{bibtex_key},"]
-            bibtex_lines.append(f"  title = {{{paper.get('title', '')}}}")
-            bibtex_lines.append(f"  author = {{{' and '.join(authors)}}}")
+            bibtex_lines = [
+                f"@{bibtex_type}{{{bibtex_key},",
+                f"  title = {{{paper.get('title', '')}}}",
+                f"  author = {{{' and '.join(authors)}}}",
+            ]
             if year:
                 bibtex_lines.append(f"  year = {{{year}}}")
             if paper.get("venue"):

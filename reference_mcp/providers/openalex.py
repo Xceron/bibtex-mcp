@@ -1,7 +1,7 @@
 """OpenAlex provider implementation."""
 
 import httpx
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 
 from reference_mcp.providers.base import AbstractProvider
@@ -19,15 +19,27 @@ class OpenAlexProvider(AbstractProvider):
         super().__init__()
         self.base_url = "https://api.openalex.org"
 
-    async def search(self, query: str, limit: int) -> List[Reference]:
+    async def search(
+        self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None
+    ) -> List[Reference]:
         """Search OpenAlex for works."""
-        # Filter for Computer Science (C41008148) and search in display name
-        filter_param = "concepts.id:C41008148"
-        search_param = f'display_name.search:"{query}"'
+        # Build filters
+        filters = ["concepts.id:C41008148", f'display_name.search:"{query}"']  # Computer Science filter
+
+        # Add year filter if provided
+        if year:
+            filters.append(f"publication_year:>{year - 1}")  # Greater than or equal to year
+
+        # Add author filter if provided
+        if author:
+            filters.append(f'authorships.author.display_name.search:"{author}"')
+
+        # Combine all filters
+        filter_param = ",".join(filters)
 
         url = (
             f"{self.base_url}/works?"
-            f"filter={quote(filter_param)},{quote(search_param)}"
+            f"filter={quote(filter_param)}"
             f"&per-page={min(limit, self.MAX_PER_QUERY)}"
             f"&select=id,doi,title,authorships,publication_year,primary_location,"
             f"biblio,type"
@@ -86,9 +98,11 @@ class OpenAlexProvider(AbstractProvider):
             openalex_id = work.get("id", "").split("/")[-1] if work.get("id") else "unknown"
             bibtex_key = f"openalex_{openalex_id}"
 
-            bibtex_lines = [f"@{bibtex_type}{{{bibtex_key},"]
-            bibtex_lines.append(f"  title = {{{work.get('title', '')}}}")
-            bibtex_lines.append(f"  author = {{{' and '.join(authors)}}}")
+            bibtex_lines = [
+                f"@{bibtex_type}{{{bibtex_key},",
+                f"  title = {{{work.get('title', '')}}}",
+                f"  author = {{{' and '.join(authors)}}}",
+            ]
             if year:
                 bibtex_lines.append(f"  year = {{{year}}}")
             if venue:

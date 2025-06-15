@@ -1,7 +1,7 @@
 """DBLP provider implementation."""
 
 import httpx
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 
 from reference_mcp.providers.base import AbstractProvider
@@ -19,9 +19,17 @@ class DBLPProvider(AbstractProvider):
         super().__init__()
         self.base_url = "https://dblp.org/search/publ/api"
 
-    async def search(self, query: str, limit: int) -> List[Reference]:
+    async def search(
+        self, query: str, limit: int, year: Optional[int] = None, author: Optional[str] = None
+    ) -> List[Reference]:
         """Search DBLP for publications."""
-        url = f"{self.base_url}?q={quote(query)}&h={min(limit, self.MAX_PER_QUERY)}&format=json"
+        # DBLP has limited filtering support, so we add author to the query if provided
+        search_query = query
+        if author:
+            # Add author to search query for better results
+            search_query = f"{query} {author}"
+
+        url = f"{self.base_url}?q={quote(search_query)}&h={min(limit, self.MAX_PER_QUERY)}&format=json"
 
         async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
             response = await client.get(url)
@@ -95,6 +103,14 @@ class DBLPProvider(AbstractProvider):
                 ],
                 score=float(hit.get("@score", 0)),
             )
+
+            # Apply year filter if DBLP doesn't support it natively
+            if year and ref.year:
+                try:
+                    if int(ref.year) < year:
+                        continue
+                except ValueError:
+                    continue
 
             results.append(ref)
 
