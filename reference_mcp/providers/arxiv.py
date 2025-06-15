@@ -96,8 +96,11 @@ class ArxivProvider(AbstractProvider):
             # Build BibTeX
             bibtex_key = arxiv_id.replace("/", "_") if arxiv_id else "unknown"
 
-            bibtex_lines = [f"@article{{{bibtex_key},", f"  title = {{{title}}}",
-                            f"  author = {{{' and '.join(authors)}}}"]
+            bibtex_lines = [
+                f"@article{{{bibtex_key},",
+                f"  title = {{{title}}}",
+                f"  author = {{{' and '.join(authors)}}}",
+            ]
             if year:
                 bibtex_lines.append(f"  year = {{{year}}}")
             bibtex_lines.append(f"  eprint = {{{arxiv_id}}}")
