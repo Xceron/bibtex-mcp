@@ -17,23 +17,25 @@ import uvicorn
 from reference_mcp.server import mcp
 
 
-async def register(request):
-    """
-    Claude POSTs here only once (no token exchange afterward).
-    A 201 with the fields below is all it needs.
-    """
-    return JSONResponse(
-        {
-            "client_id": "public",
-            "registration_access_token": None,
-            "token_endpoint_auth_method": "none"
-        },
-        status_code=201
-    )
-
-# Minimal OAuth stub endpoints
 async def oauth_config(request):
-    return Response(status_code=404)
+    return JSONResponse({
+        "issuer":      request.url.scheme + "://" + request.url.hostname,
+        "authorization_endpoint": None,
+        "token_endpoint": None,
+        "registration_endpoint": request.url.scheme + "://" +
+                                 request.url.hostname + "/register",
+        "response_types_supported": [],
+        "grant_types_supported": [],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "scopes_supported": []
+    })
+
+async def register(request):
+    return JSONResponse({
+        "client_id": "public",
+        "registration_access_token": None,
+        "token_endpoint_auth_method": "none"
+    })
 
 
 def main():
@@ -46,10 +48,11 @@ def main():
 
     # Create Starlette app with OAuth stub endpoints
     routes = [
+        Route("/.well-known/oauth-authorization-server",
+              oauth_config, methods=["GET"]),
         Route("/register", register, methods=["POST"]),
-        Mount("/", app=mcp_app)
+        Mount("/", app=mcp_app),
     ]
-
     app = Starlette(routes=routes)
 
     app.add_middleware(
