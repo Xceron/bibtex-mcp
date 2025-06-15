@@ -1,0 +1,40 @@
+[project]
+name = "reference-mcp"
+version = "0.1.0"
+description = "MCP server for academic reference search across multiple providers"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.0",
+    "httpx[http2]",
+    "pydantic>=2.0",
+    "rapidfuzz",
+    "bibtexparser",
+    "typer",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",  
+    "respx",
+    "ruff",
+    "mypy",
+]
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+ignore = [
+    "F403",
+    "F405"
+]
+fixable = ["ALL"]

@@ -1,0 +1,98 @@
+"""FastMCP server implementation for reference search."""
+
+import logging
+from fastmcp import FastMCP
+from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger(__name__)
+
+# Try both import methods to support package and standalone execution
+try:
+    # Package import (when installed as a package)
+    from reference_mcp.models import SearchInput
+    from reference_mcp.providers.registry import get_providers
+    from reference_mcp.aggregator import fanout, dedupe_rank
+except ImportError:
+    # Relative import (when run as module)
+    from .models import SearchInput
+    from .providers.registry import get_providers
+    from .aggregator import fanout, dedupe_rank
+
+
+# Initialize FastMCP server
+mcp = FastMCP("ReferenceSearch")
+
+# Health check will be handled by FastMCP's built-in health endpoint
+
+
+@mcp.tool(name="search_reference")
+async def search_reference(query: str, max_results: int = 20, providers: Optional[List[str]] = None) -> Dict[str, Any]:
+    """
+    Search academic literature databases (DBLP, Semantic Scholar, arXiv, OpenAlex) to find research papers and return properly formatted BibTeX citations.
+
+    Use this tool when the user needs:
+    - Academic citations for research papers, articles, or publications
+    - BibTeX entries for bibliography management
+    - Information about specific papers (authors, venue, publication year, abstract)
+    - Literature search results from computer science and AI databases
+
+    The tool automatically searches all major academic databases, deduplicates results, and ranks by relevance.
+    Each result includes complete bibliographic metadata and a ready-to-use BibTeX citation.
+
+    Args:
+        query: Academic search terms (paper titles, author names, keywords, concepts).
+               Examples: "transformer architecture", "John Smith machine learning", "BERT language model"
+        max_results: Number of results to return (1-100, default 20). Use lower values (5-10) for focused searches.
+        providers: Optional list of provider names to search. If not specified, searches all.
+                  Available: ["arxiv", "dblp", "semantic_scholar", "openalex"]
+
+    Returns:
+        Dictionary with query, total_results count, and array of references containing:
+        - Complete bibliographic data (title, authors, year, venue, DOI, etc.)
+        - Abstract text when available
+        - Formatted BibTeX citation ready for use
+        - Citation count and relevance score
+        - Source databases that found this reference
+    """
+    logger.info(f"Tool called with query: {query}, max_results: {max_results}, providers: {providers}")
+
+    try:
+        # Validate input
+        input_data = SearchInput(
+            query=query,
+            max_results=max_results,
+            providers=providers,
+        )
+
+        # Get provider instances
+        provider_instances = get_providers(input_data.providers)
+        logger.info(f"Using providers: {[p.NAME for p in provider_instances]}")
+
+        # Execute parallel search - overfetch for better deduplication
+        all_results = await fanout(
+            input_data.query,
+            input_data.max_results * 2,  # Over-fetch for better deduplication
+            provider_instances,
+        )
+        logger.info(f"Raw results count: {len(all_results)}")
+
+        # Deduplicate and rank results
+        final_results = dedupe_rank(all_results, input_data.max_results)
+        logger.info(f"Final results count: {len(final_results)}")
+
+        # Format response as JSON string for display
+        result = {
+            "references": [ref.model_dump() for ref in final_results],
+            "total_found": len(final_results),
+            "providers_used": [p.NAME for p in provider_instances],
+        }
+        logger.info(f"Returning result with {len(final_results)} references")
+
+        # Return as formatted JSON string for Claude.ai display
+        import json
+
+        return json.dumps(result, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        logger.error(f"Error in search_reference: {e}")
+        raise
