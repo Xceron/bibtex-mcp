@@ -17,30 +17,37 @@ import uvicorn
 from reference_mcp.server import mcp
 
 
+async def register(request):
+    """
+    Claude POSTs here only once (no token exchange afterward).
+    A 201 with the fields below is all it needs.
+    """
+    return JSONResponse(
+        {
+            "client_id": "public",
+            "registration_access_token": None,
+            "token_endpoint_auth_method": "none"
+        },
+        status_code=201
+    )
+
 # Minimal OAuth stub endpoints
 async def oauth_config(request):
     return Response(status_code=404)
 
 
-async def register(request):
-    """Registration endpoint - no registration required."""
-    return JSONResponse({"client_id": "public", "registration_access_token": None})
-
-
 def main():
     """Run the MCP server with streamable-http transport."""
-    # Get configuration from environment with defaults
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     log_level = os.getenv("LOG_LEVEL", "info")
 
-    # Create FastMCP app with SSE
     mcp_app = mcp.http_app(transport="sse")
 
     # Create Starlette app with OAuth stub endpoints
     routes = [
-        Route("/.well-known/oauth-authorization-server", oauth_config),
-        Mount("/", app=mcp_app),
+        Route("/register", register, methods=["POST"]),
+        Mount("/", app=mcp_app)
     ]
 
     app = Starlette(routes=routes)
