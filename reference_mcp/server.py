@@ -1,32 +1,16 @@
-"""FastMCP server implementation for reference search."""
-
 import logging
 from fastmcp import FastMCP
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
+import json
+from reference_mcp.models import SearchInput
+from reference_mcp.providers.registry import get_providers
+from reference_mcp.aggregator import fanout, dedupe_rank
 
 logger = logging.getLogger(__name__)
-
-# Try both import methods to support package and standalone execution
-try:
-    # Package import (when installed as a package)
-    from reference_mcp.models import SearchInput
-    from reference_mcp.providers.registry import get_providers
-    from reference_mcp.aggregator import fanout, dedupe_rank
-except ImportError:
-    # Relative import (when run as module)
-    from .models import SearchInput
-    from .providers.registry import get_providers
-    from .aggregator import fanout, dedupe_rank
-
-
-# Initialize FastMCP server
 mcp = FastMCP("ReferenceSearch")
 
-# Health check will be handled by FastMCP's built-in health endpoint
-
-
 @mcp.tool(name="search_reference")
-async def search_reference(query: str, max_results: int = 20, providers: Optional[List[str]] = None) -> Dict[str, Any]:
+async def search_reference(query: str, max_results: int = 20, year: Optional[int] = None, author: Optional[str] = None) -> Dict[str, Any]:
     """
     Search academic literature databases (DBLP, Semantic Scholar, arXiv, OpenAlex) to find research papers and return properly formatted BibTeX citations.
 
@@ -43,8 +27,8 @@ async def search_reference(query: str, max_results: int = 20, providers: Optiona
         query: Academic search terms (paper titles, author names, keywords, concepts).
                Examples: "transformer architecture", "John Smith machine learning", "BERT language model"
         max_results: Number of results to return (1-100, default 20). Use lower values (5-10) for focused searches.
-        providers: Optional list of provider names to search. If not specified, searches all.
-                  Available: ["arxiv", "dblp", "semantic_scholar", "openalex"]
+        year: Optional year filter. If provided, returns papers published in or after this year.
+        author: Optional author name filter. If provided, returns papers by authors matching this name.
 
     Returns:
         Dictionary with query, total_results count, and array of references containing:
@@ -54,19 +38,19 @@ async def search_reference(query: str, max_results: int = 20, providers: Optiona
         - Citation count and relevance score
         - Source databases that found this reference
     """
-    logger.info(f"Tool called with query: {query}, max_results: {max_results}, providers: {providers}")
+    logger.info(f"Tool called with query: {query}, max_results: {max_results}, year: {year}, author: {author}")
 
     try:
         # Validate input
         input_data = SearchInput(
             query=query,
             max_results=max_results,
-            providers=providers,
+            providers=None,  # Always use all providers
         )
 
-        # Get provider instances
-        provider_instances = get_providers(input_data.providers)
-        logger.info(f"Using providers: {[p.NAME for p in provider_instances]}")
+        # Get all provider instances
+        provider_instances = get_providers(None)
+        logger.info(f"Using all providers: {[p.NAME for p in provider_instances]}")
 
         # Execute parallel search - overfetch for better deduplication
         all_results = await fanout(
@@ -75,6 +59,30 @@ async def search_reference(query: str, max_results: int = 20, providers: Optiona
             provider_instances,
         )
         logger.info(f"Raw results count: {len(all_results)}")
+        
+        # Apply year and author filters if provided
+        if year or author:
+            filtered_results = []
+            for result in all_results:
+                # Year filter
+                if year and result.year:
+                    try:
+                        if int(result.year) < year:
+                            continue
+                    except ValueError:
+                        continue
+                
+                # Author filter
+                if author and result.authors:
+                    # Case-insensitive partial match
+                    author_lower = author.lower()
+                    if not any(author_lower in a.lower() for a in result.authors):
+                        continue
+                
+                filtered_results.append(result)
+            
+            all_results = filtered_results
+            logger.info(f"Filtered results count: {len(all_results)}")
 
         # Deduplicate and rank results
         final_results = dedupe_rank(all_results, input_data.max_results)
@@ -84,13 +92,13 @@ async def search_reference(query: str, max_results: int = 20, providers: Optiona
         result = {
             "references": [ref.model_dump() for ref in final_results],
             "total_found": len(final_results),
-            "providers_used": [p.NAME for p in provider_instances],
+            "query": query,
         }
+        if year:
+            result["year_filter"] = year
+        if author:
+            result["author_filter"] = author
         logger.info(f"Returning result with {len(final_results)} references")
-
-        # Return as formatted JSON string for Claude.ai display
-        import json
-
         return json.dumps(result, indent=2, ensure_ascii=False)
 
     except Exception as e:
