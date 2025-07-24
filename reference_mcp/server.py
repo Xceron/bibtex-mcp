@@ -239,7 +239,7 @@ async def search(query: str, top_k: int = 10) -> list[dict]:
         hits = []
         for ref in cached_full_results:
             # Use consistent ID generation with cache
-            ref_id = search_cache._get_ref_id(ref)
+            ref_id = SimpleCache._get_ref_id(ref)
 
             # Create snippet from abstract or venue info
             snippet = ""
@@ -309,7 +309,7 @@ async def fetch(ids: list[str]) -> dict[str, str]:
                     if data["references"]:
                         ref = data["references"][0]
                         # Check if this ref matches the requested ID
-                        found_ref_id = search_cache._get_ref_id(ref)
+                        found_ref_id = SimpleCache._get_ref_id(ref)
 
                         if found_ref_id == doc_id:
                             bibtex = ref["bibtex"]
