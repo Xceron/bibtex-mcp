@@ -1,6 +1,8 @@
 import json
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from dataclasses import dataclass
 
 from fastmcp import FastMCP
 
@@ -10,6 +12,49 @@ from reference_mcp.providers.registry import get_providers
 
 logger = logging.getLogger(__name__)
 mcp = FastMCP("ReferenceSearch")
+
+
+@dataclass
+class CacheEntry:
+    """Cache entry with expiration time."""
+
+    data: Any
+    expires_at: datetime
+
+
+class SimpleCache:
+    """Simple in-memory cache with TTL support."""
+
+    def __init__(self, ttl_minutes: int = 10):
+        self._cache: Dict[str, CacheEntry] = {}
+        self._ttl = timedelta(minutes=ttl_minutes)
+
+    def get(self, key: str) -> Optional[Any]:
+        """Get value from cache if not expired."""
+        if key in self._cache:
+            entry = self._cache[key]
+            if datetime.now() < entry.expires_at:
+                return entry.data
+            else:
+                # Clean up expired entry
+                del self._cache[key]
+        return None
+
+    def set(self, key: str, value: Any) -> None:
+        """Set value in cache with TTL."""
+        expires_at = datetime.now() + self._ttl
+        self._cache[key] = CacheEntry(data=value, expires_at=expires_at)
+
+    def clear_expired(self) -> None:
+        """Remove all expired entries."""
+        now = datetime.now()
+        expired_keys = [k for k, v in self._cache.items() if v.expires_at <= now]
+        for key in expired_keys:
+            del self._cache[key]
+
+
+# Global cache instance
+search_cache = SimpleCache(ttl_minutes=10)
 
 
 @mcp.tool(name="search_reference")
@@ -85,4 +130,139 @@ async def search_reference(
 
     except Exception as e:
         logger.error(f"Error in search_reference: {e}")
+        raise
+
+
+@mcp.tool(name="search")
+async def search(query: str, top_k: int = 10) -> list[dict]:
+    """
+    Search academic literature and return lightweight results for browsing.
+
+    This is the recall step - returns compact metadata to help decide which documents to fetch.
+    Each result contains only essential information: ID, title, and a snippet.
+
+    Args:
+        query: Search terms (paper titles, author names, keywords)
+        top_k: Number of results to return (default 10)
+
+    Returns:
+        List of lightweight result objects with id, title, and snippet fields
+    """
+    logger.info(f"Search tool called with query: {query}, top_k: {top_k}")
+
+    try:
+        # Check cache first
+        cache_key = f"search:{query}:{top_k}"
+        cached_full_results = search_cache.get(cache_key)
+
+        if cached_full_results is None:
+            # Call the existing search_reference function
+            raw_json = await search_reference(query=query, max_results=top_k)
+            data = json.loads(raw_json)
+            # Cache the full results for fetch to use
+            search_cache.set(cache_key, data["references"])
+            cached_full_results = data["references"]
+
+        # Build lightweight results
+        hits = []
+        for ref in cached_full_results:
+            # Create a stable ID from available identifiers
+            ref_id = (
+                ref.get("doi") or ref.get("arxiv_id") or ref.get("s2_paper_id") or ref.get("dblp_key") or ref["title"]
+            )
+
+            # Create snippet from abstract or venue info
+            snippet = ""
+            if ref.get("abstract"):
+                snippet = ref["abstract"][:200] + "..." if len(ref["abstract"]) > 200 else ref["abstract"]
+            elif ref.get("venue"):
+                snippet = f"Published in {ref['venue']}"
+                if ref.get("year"):
+                    snippet += f" ({ref['year']})"
+
+            hits.append({"id": ref_id, "title": ref["title"], "snippet": snippet})
+
+        logger.info(f"Returning {len(hits)} lightweight results")
+        return hits
+
+    except Exception as e:
+        logger.error(f"Error in search tool: {e}")
+        raise
+
+
+@mcp.tool(name="fetch")
+async def fetch(ids: list[str]) -> dict[str, str]:
+    """
+    Fetch full documents for previously searched references.
+
+    This is the precision step - returns complete BibTeX records and abstracts
+    for documents identified by the search tool.
+
+    Args:
+        ids: List of document IDs from previous search results
+
+    Returns:
+        Dictionary mapping IDs to full document text (BibTeX + abstract)
+    """
+    logger.info(f"Fetch tool called with {len(ids)} IDs")
+
+    try:
+        results: dict[str, str] = {}
+
+        # First try to find results in cache
+        for doc_id in ids:
+            found = False
+
+            # Check all cached search results
+            for key in list(search_cache._cache.keys()):
+                if key.startswith("search:"):
+                    cached_refs = search_cache.get(key)
+                    if cached_refs:
+                        for ref in cached_refs:
+                            # Match by any identifier
+                            ref_id = (
+                                ref.get("doi")
+                                or ref.get("arxiv_id")
+                                or ref.get("s2_paper_id")
+                                or ref.get("dblp_key")
+                                or ref["title"]
+                            )
+                            if ref_id == doc_id:
+                                # Format the full document
+                                bibtex = ref["bibtex"]
+                                abstract = ref.get("abstract", "")
+
+                                if abstract:
+                                    results[doc_id] = f"{bibtex}\n\nAbstract:\n{abstract}"
+                                else:
+                                    results[doc_id] = bibtex
+
+                                found = True
+                                break
+                if found:
+                    break
+
+            # If not found in cache, search for it specifically
+            if not found:
+                logger.info(f"ID {doc_id} not found in cache, searching...")
+                raw_json = await search_reference(query=doc_id, max_results=1)
+                data = json.loads(raw_json)
+
+                if data["references"]:
+                    ref = data["references"][0]
+                    bibtex = ref["bibtex"]
+                    abstract = ref.get("abstract", "")
+
+                    if abstract:
+                        results[doc_id] = f"{bibtex}\n\nAbstract:\n{abstract}"
+                    else:
+                        results[doc_id] = bibtex
+                else:
+                    logger.warning(f"No results found for ID: {doc_id}")
+
+        logger.info(f"Returning {len(results)} full documents")
+        return results
+
+    except Exception as e:
+        logger.error(f"Error in fetch tool: {e}")
         raise
