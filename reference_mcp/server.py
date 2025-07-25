@@ -246,20 +246,21 @@ def create_server():
         return await _search_reference_impl(query, max_results, year, author)
 
     @mcp.tool()
-    async def search(query: str, top_k: int = 10) -> list[dict]:
+    async def search(query: str) -> dict:
         """
         Search academic literature and return lightweight results for browsing.
 
         This is the recall step - returns compact metadata to help decide which documents to fetch.
-        Each result contains only essential information: ID, title, and a snippet.
+        Natural language queries work best for semantic search across academic databases.
 
         Args:
             query: Search terms (paper titles, author names, keywords)
-            top_k: Number of results to return (default 10)
 
         Returns:
-            List of lightweight result objects with id, title, and snippet fields
+            Dictionary with 'results' key containing list of search results.
+            Each result includes: id, title, and snippet (text preview).
         """
+        top_k = 10  # Default value for ChatGPT compatibility
         logger.info(f"Search tool called with query: {query}, top_k: {top_k}")
 
         # Input validation
@@ -299,14 +300,15 @@ def create_server():
                 hits.append({"id": ref_id, "title": ref["title"], "snippet": snippet})
 
             logger.info(f"Returning {len(hits)} lightweight results")
-            return hits
+            # Return in format expected by ChatGPT
+            return {"results": hits}
 
         except Exception as e:
             logger.error(f"Error in search tool: {e}")
             raise
 
-    @mcp.tool()
-    async def fetch(ids: list[str]) -> dict[str, str]:
+    @mcp.tool(name="fetch_multiple")
+    async def fetch_multiple(ids: list[str]) -> dict[str, str]:
         """
         Fetch full documents for previously searched references.
 
@@ -378,5 +380,38 @@ def create_server():
 
         logger.info(f"Returning {len(results)} full documents out of {len(ids)} requested")
         return results
+    
+    # Add a single-ID fetch for ChatGPT compatibility
+    @mcp.tool(name="fetch")
+    async def fetch(id: str) -> dict:
+        """
+        Fetch a single document by ID.
+        
+        This is designed for ChatGPT compatibility which expects a single ID parameter.
+        
+        Args:
+            id: Document ID from previous search results
+            
+        Returns:
+            Dictionary containing the full document with id, title, text (BibTeX + abstract)
+        """
+        logger.info(f"Fetch single called with ID: {id}")
+        
+        # Use the existing fetch_multiple function
+        results = await fetch_multiple([id])
+        
+        if id in results:
+            # Format for ChatGPT compatibility
+            return {
+                "id": id,
+                "title": "Academic Reference",  # We don't have title separately
+                "text": results[id]
+            }
+        else:
+            return {
+                "id": id,
+                "title": "Not Found",
+                "text": f"Document with ID {id} not found"
+            }
     
     return mcp
