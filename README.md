@@ -2,11 +2,20 @@
 
 Multi-provider academic reference search with BibTeX generation. Searches arXiv, DBLP, Semantic Scholar, and OpenAlex concurrently.
 
+## MCP Client Configuration
+
+For Claude Desktop, ChatGPT, or other MCP clients:
+- **Server URL**: `https://mcp.florianbrand.de/sse`
+- **Transport**: SSE (Server-Sent Events)
+- **Authentication**: None required
+
 ## Installation
 
 ### Remote Clients
 
-This server is hosted publicly under www.mcp.florianbrand.de/sse
+This server is hosted publicly at: `https://mcp.florianbrand.de/sse`
+
+**Important**: Use the URL exactly as shown above (without www subdomain)
 
 ### Local Clients
 

@@ -139,8 +139,7 @@ def create_server():
     # Cache instance for this server
     search_cache = SimpleCache(ttl_minutes=10)
     
-    @mcp.tool()
-    async def search_reference(
+    async def _search_reference_impl(
         query: str, max_results: int = 20, year: Optional[int] = None, author: Optional[str] = None
     ) -> dict:
         """
@@ -213,6 +212,38 @@ def create_server():
         except Exception as e:
             logger.error(f"Error in search_reference: {e}")
             raise
+    
+    @mcp.tool()
+    async def search_reference(
+        query: str, max_results: int = 20, year: Optional[int] = None, author: Optional[str] = None
+    ) -> dict:
+        """
+        Search academic literature databases (DBLP, Semantic Scholar, arXiv, OpenAlex) to find research papers and return properly formatted BibTeX citations.
+
+        Use this tool when the user needs:
+        - Academic citations for research papers, articles, or publications
+        - BibTeX entries for bibliography management
+        - Information about specific papers (authors, venue, publication year, abstract)
+        - Literature search results from computer science and AI databases
+
+        The tool automatically searches all major academic databases, deduplicates results, and ranks by relevance.
+        Each result includes complete bibliographic metadata and a ready-to-use BibTeX citation.
+
+        Args:
+            query: Academic search terms (paper titles, author names, years or any combination of them yields the best results).
+            max_results: Number of results to return (1-100, default 20). Use lower values (5-10) for focused searches.
+            year: Optional year filter. If provided, returns papers published in this year.
+            author: Optional author name filter. If provided, returns papers by authors matching this name.
+
+        Returns:
+            Dictionary with query, total_results count, and array of references containing:
+            - Complete bibliographic data (title, authors, year, venue, DOI, etc.)
+            - Abstract text when available
+            - Formatted BibTeX citation ready for use
+            - Citation count
+            - Source databases that found this reference
+        """
+        return await _search_reference_impl(query, max_results, year, author)
 
     @mcp.tool()
     async def search(query: str, top_k: int = 10) -> list[dict]:
@@ -245,7 +276,7 @@ def create_server():
 
             if cached_full_results is None:
                 # Call the existing search_reference function
-                data = await search_reference(query=query, max_results=top_k)
+                data = await _search_reference_impl(query=query, max_results=top_k)
                 # Cache the full results for fetch to use
                 search_cache.set(cache_key, data["references"])
                 cached_full_results = data["references"]
@@ -317,7 +348,7 @@ def create_server():
                     # If not found in cache, search for it specifically
                     logger.info(f"ID {doc_id} not found in cache, searching...")
                     try:
-                        data = await search_reference(query=doc_id, max_results=1)
+                        data = await _search_reference_impl(query=doc_id, max_results=1)
 
                         if data["references"]:
                             ref = data["references"][0]
