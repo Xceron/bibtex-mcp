@@ -307,8 +307,7 @@ def create_server():
             logger.error(f"Error in search tool: {e}")
             raise
 
-    @mcp.tool(name="fetch_multiple")
-    async def fetch_multiple(ids: list[str]) -> dict[str, str]:
+    async def _fetch_impl(ids: list[str]) -> dict[str, str]:
         """
         Fetch full documents for previously searched references.
 
@@ -381,6 +380,22 @@ def create_server():
         logger.info(f"Returning {len(results)} full documents out of {len(ids)} requested")
         return results
     
+    @mcp.tool(name="fetch_multiple")
+    async def fetch_multiple(ids: list[str]) -> dict[str, str]:
+        """
+        Fetch full documents for previously searched references.
+
+        This is the precision step - returns complete BibTeX records and abstracts
+        for documents identified by the search tool.
+
+        Args:
+            ids: List of document IDs from previous search results
+
+        Returns:
+            Dictionary mapping IDs to full document text (BibTeX + abstract)
+        """
+        return await _fetch_impl(ids)
+    
     # Add a single-ID fetch for ChatGPT compatibility
     @mcp.tool(name="fetch")
     async def fetch(id: str) -> dict:
@@ -397,8 +412,8 @@ def create_server():
         """
         logger.info(f"Fetch single called with ID: {id}")
         
-        # Use the existing fetch_multiple function
-        results = await fetch_multiple([id])
+        # Use the implementation function
+        results = await _fetch_impl([id])
         
         if id in results:
             # Format for ChatGPT compatibility
